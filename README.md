@@ -1,5 +1,6 @@
 Git commands
- Starting commands
+ 
+Starting commands
  1. git config --global user.name "[name]"
  - setting dev name
  2. git config --global user.email "[email]"
