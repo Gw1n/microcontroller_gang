@@ -46,14 +46,14 @@ void controlMotor(uint8_t motorNum, int8_t speed) {
         } else {
             PORTB &= ~(1 << PB0);
         }
-        OCR0A = absSpeed; // PWM for Motor 1
+        OCR1A = absSpeed*ICR1; // PWM for Motor 1
     } else if (motorNum == 2) {
         if (speed >= 0) {
             PORTB |= (1 << PB3);
         } else {
             PORTB &= ~(1 << PB3);
         }
-        OCR0B = absSpeed; // PWM for Motor 2
+        OCR1B = absSpeed*ICR1; // PWM for Motor 2
     }
 }
 
