@@ -5,7 +5,7 @@
 
 void InitUSART(uint32_t baud_rate);
 uint8_t ReceiveByte(void);
-void controlMotor(uint8_t motorNum, int8_t speed);
+void controlMotor(uint8_t motorNum, float speed);
 void InitTimer1();
 void InitMotors();
 
@@ -38,22 +38,26 @@ void InitMotors() {
     DDRB |= (1 << PB0) | (1 << PB3) | (1 << PB1) | (1 << PB2);
 }
 
-void controlMotor(uint8_t motorNum, int8_t speed) {
-    uint8_t absSpeed = abs(speed);
-    if (motorNum == 1) {
-        if (speed >= 0) { 
-            PORTB |= (1 << PB0);
-        } else {
-            PORTB &= ~(1 << PB0);
-        }
-        OCR1A = absSpeed*ICR1; // PWM for Motor 1
-    } else if (motorNum == 2) {
+void controlMotor(uint8_t motorNum, float speed) {
+    // uint8_t absSpeed = abs(speed);
+    if (motorNum == 1) { // right motor
         if (speed >= 0) {
-            PORTB |= (1 << PB3);
+            PORTB &= ~(1 << PB0);
+            PORTB |= (1 << PB1); // forward movement
         } else {
-            PORTB &= ~(1 << PB3);
+            PORTB &= ~(1 << PB1); // backwards movement
+            PORTB |= (1 << PB0);
         }
-        OCR1B = absSpeed*ICR1; // PWM for Motor 2
+        OCR1A = abs(speed)*ICR1; // PWM for Motor 1
+    } else if (motorNum == 2) { // left motor
+        if (speed >= 0) {
+            PORTB &= ~(1 << PB3); 
+            PORTB |= (1 << PB2); // forwards movement
+        } else {
+           PORTB &= ~(1 << PB2); // backwards movement
+           PORTB |= (1 << PB3);
+        }
+        OCR1B = abs(speed)*ICR1; // PWM for Motor 2
     }
 }
 
@@ -65,20 +69,20 @@ int main(void) {
         char cmd = ReceiveByte();
         switch (cmd) {
             case 'w': // forward
-                controlMotor(1, 200);
-                controlMotor(2, 200);
+                controlMotor(1, 1);
+                controlMotor(2, 1);
                 break;
             case 's': // backward
-                controlMotor(1, -200);
-                controlMotor(2, -200);
+                controlMotor(1, -1);
+                controlMotor(2, -1);
                 break;
             case 'a': // turn left
-                controlMotor(1, 150);
+                controlMotor(1, 0.25);
                 controlMotor(2, 0);
                 break;
             case 'd': // turn right
                 controlMotor(1, 0);
-                controlMotor(2, 150);
+                controlMotor(2, 0.25);
                 break;
             default:
                 controlMotor(1, 0);
