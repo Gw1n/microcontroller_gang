@@ -13,10 +13,9 @@
 #define M2_IN1 PB2
 #define M2_IN2 PB3
 
-uint16_t threshold;
+float threshold;
 uint16_t EEMEM eeprom_threshold;
-uint8_t LED13 = (1 << PB5);
-//ISR(INT0_vect);
+ISR(INT0_vect);
 const uint8_t SW2_PIN = (1 << PD2);
 
 
@@ -37,10 +36,12 @@ uint16_t read_ADC(uint8_t channel)
 
 void PWM_init()
 {
-    // Fast PWM 8-bit: WGM13:0 = 0b0101 (Mode 5)
-    TCCR1A = (1<<COM1A1) | (1<<COM1B1) | (1<<WGM11);
-    TCCR1B = (1<<WGM13) | (1<<WGM12) | (1<<CS11); // Prescaler 8, Fast PWM 8-bit
-    ICR1 = 15999;
+    TCCR1A |= (1 << WGM10);
+    TCCR1B |= (1 << WGM12);
+
+    TCCR1A |= (1 << COM1A1) | (1 << COM1B1);
+
+    TCCR1B |= (1 << CS11) | (1 << CS10);
 }
 
 void Motor1_set(uint8_t speed, bool forward)
@@ -52,7 +53,19 @@ void Motor1_set(uint8_t speed, bool forward)
         PORTB &= ~(1 << M1_IN2);
         PORTB |= (1 << M1_IN1);
     }
-    OCR1A = speed*ICR1; // EN1 connected to OC1A
+    OCR1A = speed; // EN1 connected to OC1A
+}
+
+void Motor1_set(int8_t speed)
+{
+    if (speed < 0) {
+        PORTB &= ~(1 << M1_IN1);
+        PORTB |= (1 << M1_IN2);
+    } else {
+        PORTB &= ~(1 << M1_IN2);
+        PORTB |= (1 << M1_IN1);
+    }
+    OCR1A = abs(speed); // EN1 connected to OC1A
 }
 
 void Motor2_set(uint8_t speed, bool forward)
@@ -64,79 +77,72 @@ void Motor2_set(uint8_t speed, bool forward)
         PORTB &= ~(1 << M2_IN1);
         PORTB |= (1 << M2_IN2);
     }
-    OCR1B = speed*ICR1; // EN2 connected to OC1B
+    OCR1B = speed; // EN2 connected to OC1B
+}
+
+void Motor2_set(int8_t speed)
+{
+    if (speed < 0) {
+        PORTB &= ~(1 << M2_IN2);
+        PORTB |= (1 << M2_IN1);
+    } else {
+        PORTB &= ~(1 << M2_IN1);
+        PORTB |= (1 << M2_IN2);
+    }
+    OCR1B = abs(speed); // EN2 connected to OC1B
 }
 
 void threshold_calibration()
 {
-    while ((PIND & SW2_PIN) != 0) {
-        threshold = (read_ADC(SENSOR_LEFT_CHANNEL) + read_ADC(SENSOR_RIGHT_CHANNEL)) / 2;
+        threshold = (read_ADC(SENSOR_LEFT_CHANNEL) + read_ADC(SENSOR_RIGHT_CHANNEL)) / 1.5;
+
         _delay_ms(50);
-        
-    }
+
     eeprom_write_word(&eeprom_threshold, threshold);
 }
 
-/*ISR(INT0_vect)
+ISR(INT0_vect)
 {
   _delay_ms(5);
-  Serial.println("Hello");
-  if ((PIND & SW2_PIN) == 0) {
+  if ((PIND & SW2_PIN) != 0) {
         threshold_calibration();
-
     }
 
-}*/
+  threshold = eeprom_read_word(&eeprom_threshold);
+
+}
 
 int main(void)
 {
-    Serial.begin(9600);
     // I/O Setup
+    Serial.begin(9600);
 
-    /*EIMSK |= (1 << INT0);          
+    EIMSK |= (1 << INT0);          
     EICRA = (1 << ISC01); 
 
-    sei();*/
+    sei();
 
     DDRB |= (1 << PB0) | (1 << PB1) | (1 << PB2) | (1 << PB3); // Motor pins
-    PORTD |= (1 << SW2_PIN) | (1 << MODE_DETECT_PIN);          // Pull-ups
-    DDRB |= LED13;
+    PORTD |= (SW2_PIN) | (1 << MODE_DETECT_PIN);          // Pull-ups
 
     ADC_init();
     PWM_init();
 
-    //uint8_t bangbang_mode = !(PIND & (1 << MODE_DETECT_PIN)); // PD4 shorted to GND?
-
-     /*while ((PIND & SW2_PIN) == 0) 
-     {
-      PORTB |= (1 << PB5);
-     }*/
-    Serial.println("Test");
-    PORTB &= ~(1 << PB5);
-    if ((PIND & SW2_PIN) != 0) {
-      
-      threshold_calibration();
-    }
-
-
-    threshold = eeprom_read_word(&eeprom_threshold);
-    //if (threshold == 0xFFFF) threshold = 512;
+    threshold = 700;
 
     while (1) {
-      PORTB |= (1 << PB5);
       uint8_t bangbang_mode = (PIND & (1 << MODE_DETECT_PIN)); // PD4 shorted to GND?
+      uint16_t left_val = read_ADC(SENSOR_LEFT_CHANNEL);
+      uint16_t right_val = read_ADC(SENSOR_RIGHT_CHANNEL);
+      int8_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
+
         if (bangbang_mode) {
-          //Serial.println("Test");
-            uint16_t left_val = read_ADC(SENSOR_LEFT_CHANNEL);
-            uint16_t right_val = read_ADC(SENSOR_RIGHT_CHANNEL);
-            //uint8_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
-            uint8_t pot_val = 64;
+
             //Serial.println(threshold);
 
             uint8_t left_black = left_val < threshold;
             uint8_t right_black = right_val < threshold;
 
-            //Serial.println(right_val);
 
             if (left_black && right_black) {
                 Motor1_set(pot_val, 1); // forward
@@ -155,8 +161,24 @@ int main(void)
                 Motor2_set(pot_val, 0);
             }
         } else {
-            Motor1_set(0, 1);
-            Motor2_set(0, 1);
+            int16_t error = right_val - left_val;
+            float k = 0.25;
+            //Serial.println(error);
+            if (abs(error) > 40)
+            {
+                Motor1_set(pot_val + ((float)error * k));
+                Motor2_set(pot_val - ((float)error * k));
+            }
+            else if ((abs(error) <= 40) && (right_val > threshold))
+            {
+                Motor1_set(pot_val);
+                Motor2_set(pot_val);
+            }
+            else if ((abs(error) <= 40) && (right_val < threshold))
+            {
+                Motor1_set(-pot_val);
+                Motor2_set(-pot_val);
+            }
         }
     }
 }
