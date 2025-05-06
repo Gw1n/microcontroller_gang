@@ -56,9 +56,18 @@ void Motor1_set(uint8_t speed, bool forward)
     OCR1A = speed; // EN1 connected to OC1A
 }
 
-void Motor1_set(int8_t speed)
+void Motor1_set(int16_t speed)
 {
-    if (speed < 0) {
+  if (speed > 255)
+    {
+      speed = 255;
+    }
+    else if (speed < -255)
+    {
+      speed = -255;
+    }
+
+    if (speed > 0) {
         PORTB &= ~(1 << M1_IN1);
         PORTB |= (1 << M1_IN2);
     } else {
@@ -80,9 +89,19 @@ void Motor2_set(uint8_t speed, bool forward)
     OCR1B = speed; // EN2 connected to OC1B
 }
 
-void Motor2_set(int8_t speed)
+void Motor2_set(int16_t speed)
 {
-    if (speed < 0) {
+    if (speed > 255)
+    {
+      speed = 255;
+    }
+    else if (speed < -255)
+    {
+      speed = -255;
+    }
+    Serial.println(speed);
+
+    if (speed > 0) {
         PORTB &= ~(1 << M2_IN2);
         PORTB |= (1 << M2_IN1);
     } else {
@@ -134,11 +153,11 @@ int main(void)
       uint8_t bangbang_mode = (PIND & (1 << MODE_DETECT_PIN)); // PD4 shorted to GND?
       uint16_t left_val = read_ADC(SENSOR_LEFT_CHANNEL);
       uint16_t right_val = read_ADC(SENSOR_RIGHT_CHANNEL);
-      int8_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
+      //uint8_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
+      uint8_t pot_val = 100;
 
         if (bangbang_mode) {
 
-            //Serial.println(threshold);
 
             uint8_t left_black = left_val < threshold;
             uint8_t right_black = right_val < threshold;
@@ -149,25 +168,42 @@ int main(void)
                 Motor2_set(pot_val, 1);
             }
             else if (left_black && !right_black) {
-                Motor1_set(pot_val / 2, 1);
+                Motor1_set(0, 1);
                 Motor2_set(pot_val, 1);
             }
             else if (!left_black && right_black) {
                 Motor1_set(pot_val, 1);
-                Motor2_set(pot_val / 2, 1);
+                Motor2_set(0, 1);
             }
             else {
                 Motor1_set(pot_val, 0); // backward
                 Motor2_set(pot_val, 0);
             }
-        } else {
+        } 
+        else {
             int16_t error = right_val - left_val;
-            float k = 0.25;
+            float k = 0.75;
             //Serial.println(error);
             if (abs(error) > 40)
             {
-                Motor1_set(pot_val + ((float)error * k));
-                Motor2_set(pot_val - ((float)error * k));
+              uint8_t speed1 = pot_val + ((float)error * k);
+              uint8_t speed2 = pot_val - ((float)error * k);
+              if ((pot_val + ((float)error * k)) < 0)
+              {
+                speed1 = 0;
+              }
+              else if ((pot_val - ((float)error * k)) < 0)
+              {
+                speed2 = 0;
+              }
+              else if (pot_val == 0)
+              {
+                speed1 = 0;
+                speed2 = 0;
+              }
+              
+                Motor1_set(speed1);
+                Motor2_set(speed2);
             }
             else if ((abs(error) <= 40) && (right_val > threshold))
             {
