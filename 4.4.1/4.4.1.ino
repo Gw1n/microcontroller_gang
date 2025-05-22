@@ -4,7 +4,7 @@
 
 #define SENSOR_LEFT_CHANNEL   PC0   // A0
 #define SENSOR_RIGHT_CHANNEL  PC1   // A1
-#define POT_CHANNEL           PC2   // A2
+#define POT_CHANNEL           7   // A7
 
 #define MODE_DETECT_PIN       PD4
 
@@ -17,7 +17,7 @@ float threshold;
 uint16_t EEMEM eeprom_threshold;
 ISR(INT0_vect);
 const uint8_t SW2_PIN = (1 << PD2);
-
+const uint8_t battery = 6;
 
 
 void ADC_init()
@@ -36,15 +36,15 @@ uint16_t read_ADC(uint8_t channel)
 
 void PWM_init()
 {
-    TCCR1A |= (1 << WGM10);
-    TCCR1B |= (1 << WGM12);
 
-    TCCR1A |= (1 << COM1A1) | (1 << COM1B1);
-
-    TCCR1B |= (1 << CS11) | (1 << CS10);
+  TCCR1A |= ((1<<COM1A1)|(1<<COM1B1)|(1<<WGM11));
+  //OCR1A and OCR1B as Fast PWM modes with ICR1 as TOP
+  TCCR1B |= ((1<<WGM13)|(1<<WGM12)|(1<<CS11)); //prescaler of 8
+  //hence we are using a PWM frequency of 125 Hz
+  ICR1 = 15999;
 }
 
-void Motor1_set(uint8_t speed, bool forward)
+void Motor1_set(uint16_t speed, bool forward)
 {
     if (!forward) {
         PORTB &= ~(1 << M1_IN1);
@@ -58,15 +58,10 @@ void Motor1_set(uint8_t speed, bool forward)
 
 void Motor1_set(int16_t speed)
 {
-  if (speed > 255)
+    if (speed > 14399)
     {
-      speed = 255;
+      speed = 14399;
     }
-    else if (speed < -255)
-    {
-      speed = -255;
-    }
-
     if (speed > 0) {
         PORTB &= ~(1 << M1_IN1);
         PORTB |= (1 << M1_IN2);
@@ -77,7 +72,7 @@ void Motor1_set(int16_t speed)
     OCR1A = abs(speed); // EN1 connected to OC1A
 }
 
-void Motor2_set(uint8_t speed, bool forward)
+void Motor2_set(uint16_t speed, bool forward)
 {
     if (!forward) {
         PORTB &= ~(1 << M2_IN2);
@@ -91,16 +86,10 @@ void Motor2_set(uint8_t speed, bool forward)
 
 void Motor2_set(int16_t speed)
 {
-    if (speed > 255)
+    if (speed > 14399)
     {
-      speed = 255;
+      speed = 14399;
     }
-    else if (speed < -255)
-    {
-      speed = -255;
-    }
-    Serial.println(speed);
-
     if (speed > 0) {
         PORTB &= ~(1 << M2_IN2);
         PORTB |= (1 << M2_IN1);
@@ -108,6 +97,7 @@ void Motor2_set(int16_t speed)
         PORTB &= ~(1 << M2_IN1);
         PORTB |= (1 << M2_IN2);
     }
+                
     OCR1B = abs(speed); // EN2 connected to OC1B
 }
 
@@ -131,6 +121,12 @@ ISR(INT0_vect)
 
 }
 
+uint16_t battery_Voltage(uint16_t batteryADC)
+{
+  return map(batteryADC, 0, 1023, 0, 9000);
+}
+
+
 int main(void)
 {
     // I/O Setup
@@ -153,8 +149,8 @@ int main(void)
       uint8_t bangbang_mode = (PIND & (1 << MODE_DETECT_PIN)); // PD4 shorted to GND?
       uint16_t left_val = read_ADC(SENSOR_LEFT_CHANNEL);
       uint16_t right_val = read_ADC(SENSOR_RIGHT_CHANNEL);
-      //uint8_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
-      uint8_t pot_val = 100;
+      uint16_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
+      pot_val = map(pot_val, 0, 255, 159, 14399);
 
         if (bangbang_mode) {
 
@@ -182,26 +178,14 @@ int main(void)
         } 
         else {
             int16_t error = right_val - left_val;
-            float k = 0.75;
-            //Serial.println(error);
+            float k = 0.005;
+
             if (abs(error) > 40)
             {
-              uint8_t speed1 = pot_val + ((float)error * k);
-              uint8_t speed2 = pot_val - ((float)error * k);
-              if ((pot_val + ((float)error * k)) < 0)
-              {
-                speed1 = 0;
-              }
-              else if ((pot_val - ((float)error * k)) < 0)
-              {
-                speed2 = 0;
-              }
-              else if (pot_val == 0)
-              {
-                speed1 = 0;
-                speed2 = 0;
-              }
-              
+              int16_t speed1 = pot_val * (1.0 + ((float)error * k));
+              int16_t speed2 = pot_val * (1.0 - ((float)error * k));
+
+
                 Motor1_set(speed1);
                 Motor2_set(speed2);
             }
