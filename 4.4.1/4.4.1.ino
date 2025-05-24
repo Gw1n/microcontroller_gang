@@ -45,7 +45,7 @@ void PWM_init()
 
 void Motor1_set(uint16_t speed, bool forward)
 {
-    if (!forward) {
+    if (forward == 1) {
         PORTB &= ~(1 << M1_IN1);
         PORTB |= (1 << M1_IN2);
     } else {
@@ -73,7 +73,7 @@ void Motor1_set(int16_t speed)
 
 void Motor2_set(uint16_t speed, bool forward)
 {
-    if (!forward) {
+    if (forward == 1) {
         PORTB &= ~(1 << M2_IN2);
         PORTB |= (1 << M2_IN1);
     } else {
@@ -152,8 +152,8 @@ int main(void)
         if (bangbang_mode) {
 
 
-            bool left_black = left_val < threshold;
-            bool right_black = right_val < threshold;
+            bool left_black = left_val > threshold;
+            bool right_black = right_val > threshold;
 
 
             if (left_black && right_black) {
@@ -172,29 +172,37 @@ int main(void)
                 Motor1_set(pot_val, 0); // backward
                 Motor2_set(pot_val, 0);
             }
+
         } 
         else {
             int16_t error = right_val - left_val;
-            float k = 0.005;
+            float k = 0.007;
 
             if (abs(error) > 40)
             {
               int16_t speed1 = pot_val * (1.0 + ((float)error * k));
               int16_t speed2 = pot_val * (1.0 - ((float)error * k));
+              if ((float)error * k > 1.0)
+              {
+                speed2 = 0;
+              }
+              else if ((float)error * k < -1.0)
+              {
+                speed1 = 0;
+              }
 
-
-                Motor1_set(speed1);
-                Motor2_set(speed2);
+              Motor1_set(speed1);
+              Motor2_set(speed2);
             }
             else if ((abs(error) <= 40) && (right_val > threshold))
             {
-                Motor1_set(pot_val);
-                Motor2_set(pot_val);
+              Motor1_set(pot_val);
+              Motor2_set(pot_val);
             }
             else if ((abs(error) <= 40) && (right_val < threshold))
             {
-                Motor1_set(-pot_val);
-                Motor2_set(-pot_val);
+              Motor1_set(-pot_val);
+              Motor2_set(-pot_val);
             }
         }
     }
