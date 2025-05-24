@@ -17,7 +17,6 @@ float threshold;
 uint16_t EEMEM eeprom_threshold;
 ISR(INT0_vect);
 const uint8_t SW2_PIN = (1 << PD2);
-const uint8_t battery = 6;
 
 
 void ADC_init()
@@ -121,17 +120,15 @@ ISR(INT0_vect)
 
 }
 
-uint16_t battery_Voltage(uint16_t batteryADC)
+long AVRmap(uint16_t inVal, int inMin, int inMax, int outMin, int outMax)
 {
-  return map(batteryADC, 0, 1023, 0, 9000);
+  return ((long) (inVal - inMin) * (outMax - outMin) / (inMax - inMin)) - outMin;
 }
 
 
 int main(void)
 {
     // I/O Setup
-    Serial.begin(9600);
-
     EIMSK |= (1 << INT0);          
     EICRA = (1 << ISC01); 
 
@@ -150,13 +147,13 @@ int main(void)
       uint16_t left_val = read_ADC(SENSOR_LEFT_CHANNEL);
       uint16_t right_val = read_ADC(SENSOR_RIGHT_CHANNEL);
       uint16_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
-      pot_val = map(pot_val, 0, 255, 159, 14399);
+      pot_val = AVRmap(pot_val, 0, 255, 159, 14399);
 
         if (bangbang_mode) {
 
 
-            uint8_t left_black = left_val < threshold;
-            uint8_t right_black = right_val < threshold;
+            bool left_black = left_val < threshold;
+            bool right_black = right_val < threshold;
 
 
             if (left_black && right_black) {
