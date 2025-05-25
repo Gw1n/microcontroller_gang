@@ -143,11 +143,11 @@ int main(void)
     threshold = 700;
 
     while (1) {
-      uint8_t bangbang_mode = (PIND & (1 << MODE_DETECT_PIN)); // PD4 shorted to GND?
+      bool bangbang_mode = (PIND & (1 << MODE_DETECT_PIN)); // PD4 shorted to GND?
       uint16_t left_val = read_ADC(SENSOR_LEFT_CHANNEL);
       uint16_t right_val = read_ADC(SENSOR_RIGHT_CHANNEL);
-      uint16_t pot_val = read_ADC(POT_CHANNEL) >> 2; // 0–255
-      pot_val = AVRmap(pot_val, 0, 255, 159, 14399);
+      uint16_t pot_val = read_ADC(POT_CHANNEL); // 0–1023
+      pot_val = AVRmap(pot_val, 0, 1023, 159, 14399);
 
         if (bangbang_mode) {
 
@@ -176,7 +176,7 @@ int main(void)
         } 
         else {
             int16_t error = right_val - left_val;
-            float k = 0.007;
+            float k = 0.008;
 
             if (abs(error) > 40)
             {
